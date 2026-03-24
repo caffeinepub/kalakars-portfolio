@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useInView, useSpring } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -69,82 +69,189 @@ function getGreeting(): string {
 
 // ─── Rubik's Cube Scroll Indicator ───────────────────────────────────────────
 
-const CUBELET_COLORS = [
-  "#e53e3e",
-  "#0A84FF",
-  "#BF5AF2",
-  "#ed8936",
-  "#f6e05e",
-  "#48bb78",
-  "#f0f0f0",
+// Sticker position labels for stable React keys
+const STICKER_POSITIONS = [
+  "tl",
+  "tc",
+  "tr",
+  "ml",
+  "mc",
+  "mr",
+  "bl",
+  "bc",
+  "br",
+] as const;
+
+const CUBE_FACES = [
+  {
+    name: "front",
+    style: { transform: "rotateY(0deg) translateZ(12px)" },
+    solvedColor: "#e53e3e",
+    scrambledColors: [
+      "#e53e3e",
+      "#0A84FF",
+      "#f6e05e",
+      "#48bb78",
+      "#e53e3e",
+      "#ed8936",
+      "#BF5AF2",
+      "#e53e3e",
+      "#0A84FF",
+    ],
+  },
+  {
+    name: "back",
+    style: { transform: "rotateY(180deg) translateZ(12px)" },
+    solvedColor: "#ed8936",
+    scrambledColors: [
+      "#f6e05e",
+      "#ed8936",
+      "#BF5AF2",
+      "#ed8936",
+      "#48bb78",
+      "#e53e3e",
+      "#0A84FF",
+      "#f6e05e",
+      "#ed8936",
+    ],
+  },
+  {
+    name: "left",
+    style: { transform: "rotateY(-90deg) translateZ(12px)" },
+    solvedColor: "#48bb78",
+    scrambledColors: [
+      "#48bb78",
+      "#BF5AF2",
+      "#ed8936",
+      "#f6e05e",
+      "#48bb78",
+      "#0A84FF",
+      "#e53e3e",
+      "#48bb78",
+      "#BF5AF2",
+    ],
+  },
+  {
+    name: "right",
+    style: { transform: "rotateY(90deg) translateZ(12px)" },
+    solvedColor: "#0A84FF",
+    scrambledColors: [
+      "#0A84FF",
+      "#e53e3e",
+      "#48bb78",
+      "#0A84FF",
+      "#BF5AF2",
+      "#f6e05e",
+      "#ed8936",
+      "#0A84FF",
+      "#48bb78",
+    ],
+  },
+  {
+    name: "top",
+    style: { transform: "rotateX(90deg) translateZ(12px)" },
+    solvedColor: "#f0f0f0",
+    scrambledColors: [
+      "#f0f0f0",
+      "#e53e3e",
+      "#0A84FF",
+      "#BF5AF2",
+      "#f0f0f0",
+      "#48bb78",
+      "#f6e05e",
+      "#f0f0f0",
+      "#ed8936",
+    ],
+  },
+  {
+    name: "bottom",
+    style: { transform: "rotateX(-90deg) translateZ(12px)" },
+    solvedColor: "#f6e05e",
+    scrambledColors: [
+      "#BF5AF2",
+      "#f6e05e",
+      "#e53e3e",
+      "#f6e05e",
+      "#0A84FF",
+      "#f6e05e",
+      "#48bb78",
+      "#ed8936",
+      "#f6e05e",
+    ],
+  },
 ];
 
-// Deterministic pseudo-random number generator seeded by index
-function seededRand(seed: number) {
-  let s = (seed * 1664525 + 1013904223) & 0x7fffffff;
-  return () => {
-    s = (s * 1664525 + 1013904223) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
+function interpolateColor(color1: string, color2: string, t: number): string {
+  const hex = (c: string) => [
+    Number.parseInt(c.slice(1, 3), 16),
+    Number.parseInt(c.slice(3, 5), 16),
+    Number.parseInt(c.slice(5, 7), 16),
+  ];
+  const [r1, g1, b1] = hex(color1);
+  const [r2, g2, b2] = hex(color2);
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return `rgb(${r},${g},${b})`;
 }
 
-function buildCubelets() {
-  const cubelets: {
-    id: number;
-    layer: number;
-    layerIndex: number;
-    color: string;
-    targetX: number;
-    targetY: number;
-    targetZ: number;
-    flyFromX: number;
-    flyFromY: number;
-    flyFromZ: number;
-  }[] = [];
-
-  const cellSize = 8;
-  // layer 0 = bottom (y=1 visually since we flip), layer 1 = middle, layer 2 = top
-  const ys = [1, 0, -1]; // bottom layer renders at +y (lower on screen)
-  let id = 0;
-
-  for (let li = 0; li < 3; li++) {
-    const yVal = ys[li];
-    let layerIndex = 0;
-    for (const zVal of [-1, 0, 1]) {
-      for (const xVal of [-1, 0, 1]) {
-        const rand = seededRand(id * 7919 + 13);
-        const colorIdx = Math.floor(rand() * CUBELET_COLORS.length);
-        const angle = rand() * Math.PI * 2;
-        const dist = 28 + rand() * 44;
-        const elevAngle = (rand() - 0.5) * Math.PI;
-        cubelets.push({
-          id: id++,
-          layer: li,
-          layerIndex: layerIndex++,
-          color: CUBELET_COLORS[colorIdx],
-          targetX: xVal * cellSize,
-          targetY: yVal * cellSize,
-          targetZ: zVal * cellSize,
-          flyFromX: Math.cos(angle) * Math.cos(elevAngle) * dist,
-          flyFromY: Math.sin(elevAngle) * dist,
-          flyFromZ: Math.sin(angle) * Math.cos(elevAngle) * dist,
-        });
-      }
-    }
-  }
-  return cubelets;
+function CubeFace({
+  face,
+  progress,
+}: {
+  face: (typeof CUBE_FACES)[number];
+  progress: number;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        width: "24px",
+        height: "24px",
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gridTemplateRows: "repeat(3, 1fr)",
+        gap: "1px",
+        padding: "1.5px",
+        background: "#111",
+        borderRadius: "2px",
+        ...face.style,
+        backfaceVisibility: "hidden",
+      }}
+    >
+      {STICKER_POSITIONS.map((pos, idx) => {
+        // layer-by-layer: row2 (bottom) solves first, then row1, then row0 (top)
+        const row = Math.floor(idx / 3); // 0=top,1=mid,2=bottom
+        const layerOrder = [2, 1, 0]; // bottom first
+        const layerIndex = layerOrder[row]; // 0=first to solve, 2=last
+        const start = layerIndex / 3;
+        const end = (layerIndex + 1) / 3;
+        const t = Math.max(0, Math.min(1, (progress - start) / (end - start)));
+        return (
+          <div
+            key={`${face.name}-${pos}`}
+            style={{
+              background: interpolateColor(
+                face.scrambledColors[idx],
+                face.solvedColor,
+                t,
+              ),
+              borderRadius: "1px",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
 }
-
-const CUBELETS = buildCubelets();
-
-// 9 cubelets per layer, assembled 14 at a time → 1 group
-const GROUPS_PER_LAYER = 1;
 
 function RubiksCubeScrollIndicator() {
   const [hovered, setHovered] = useState(false);
+
   const springTop = useSpring(90, { stiffness: 80, damping: 20 });
+
   const [displayTop, setDisplayTop] = useState(90);
-  const [scrollProgress, setScrollProgress] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(0);
 
   useEffect(() => {
     const onScroll = () => {
@@ -152,7 +259,7 @@ function RubiksCubeScrollIndicator() {
       const progress =
         scrollable > 0 ? Math.min(1, window.scrollY / scrollable) : 0;
       springTop.set(90 + progress * (window.innerHeight - 40 - 90));
-      setScrollProgress(progress);
+      setDisplayProgress(progress);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -160,38 +267,14 @@ function RubiksCubeScrollIndicator() {
   }, [springTop]);
 
   useEffect(() => {
-    const unsub = springTop.on("change", (v) => setDisplayTop(v));
-    return () => unsub();
+    const unsubTop = springTop.on("change", (v) => setDisplayTop(v));
+    return () => {
+      unsubTop();
+    };
   }, [springTop]);
 
-  // Compute per-cubelet transform based on scroll progress.
-  // Cubelets are grouped in fourteens (14 at once). Each layer gets 1/3 of the scroll
-  // range, split evenly across GROUPS_PER_LAYER groups so the last group always
-  // finishes exactly at scrollProgress = 1.
-  const cubeletStyles = useMemo(() => {
-    return CUBELETS.map((c) => {
-      const layerStart = c.layer / 3;
-      const layerRange = 1 / 3;
-      // group index: 14 cubelets share the same group
-      const group = Math.floor(c.layerIndex / 14);
-      const slotSize = layerRange / GROUPS_PER_LAYER;
-      const windowStart = layerStart + group * slotSize;
-      const windowEnd = windowStart + slotSize;
-      const raw = (scrollProgress - windowStart) / (windowEnd - windowStart);
-      const t = Math.max(0, Math.min(1, raw));
-      // Smooth-step easing
-      const eased = t * t * (3 - 2 * t);
-
-      const cx = c.targetX + c.flyFromX * (1 - eased);
-      const cy = c.targetY + c.flyFromY * (1 - eased);
-      const cz = c.targetZ + c.flyFromZ * (1 - eased);
-
-      return {
-        transform: `translate3d(${cx}px,${cy}px,${cz}px)`,
-        opacity: eased,
-      };
-    });
-  }, [scrollProgress]);
+  const rotX = 25 + displayProgress * 360;
+  const rotY = 45 + displayProgress * 360;
 
   return (
     <div
@@ -215,7 +298,7 @@ function RubiksCubeScrollIndicator() {
         style={{
           width: "24px",
           height: "24px",
-          perspective: "120px",
+          perspective: "72px",
           filter:
             "drop-shadow(0 4px 12px rgba(10,132,255,0.35)) drop-shadow(0 0 6px rgba(139,92,246,0.2))",
         }}
@@ -226,29 +309,11 @@ function RubiksCubeScrollIndicator() {
             height: "24px",
             position: "relative",
             transformStyle: "preserve-3d",
-            // Slight tilt so the 3D assembly looks good
-            transform: "rotateX(20deg) rotateY(35deg)",
+            transform: `rotateX(${rotX}deg) rotateY(${rotY}deg)`,
           }}
         >
-          {CUBELETS.map((c, i) => (
-            <div
-              key={c.id}
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                marginTop: "-3.5px",
-                marginLeft: "-3.5px",
-                width: "7px",
-                height: "7px",
-                borderRadius: "1px",
-                background: c.color,
-                boxShadow: "inset 0 0 0 0.5px rgba(0,0,0,0.45)",
-                transformStyle: "preserve-3d",
-                willChange: "transform, opacity",
-                ...cubeletStyles[i],
-              }}
-            />
+          {CUBE_FACES.map((face) => (
+            <CubeFace key={face.name} face={face} progress={displayProgress} />
           ))}
         </div>
       </div>
