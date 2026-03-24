@@ -1,5 +1,6 @@
-import { AnimatePresence, motion, useInView } from "motion/react";
+import { AnimatePresence, motion, useInView, useSpring } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,6 @@ const NAV_LINKS = [
 ];
 
 const SKILLS: Skill[] = [
-  // Languages
   { label: "Python", emoji: "🐍", category: "Languages" },
   { label: "C++", emoji: "⚙️", category: "Languages" },
   { label: "Java", emoji: "☕", category: "Languages" },
@@ -27,31 +27,26 @@ const SKILLS: Skill[] = [
   { label: "TypeScript", emoji: "🔷", category: "Languages" },
   { label: "Go", emoji: "🐹", category: "Languages" },
   { label: "Rust", emoji: "🦀", category: "Languages" },
-  // Web
   { label: "React", emoji: "⚛️", category: "Web" },
   { label: "Node.js", emoji: "🟢", category: "Web" },
   { label: "HTML/CSS", emoji: "🎨", category: "Web" },
   { label: "Next.js", emoji: "▲", category: "Web" },
   { label: "Express", emoji: "🚀", category: "Web" },
-  // Databases
   { label: "PostgreSQL", emoji: "🐘", category: "Databases" },
   { label: "MongoDB", emoji: "🍃", category: "Databases" },
   { label: "Redis", emoji: "🔴", category: "Databases" },
   { label: "MySQL", emoji: "🗄️", category: "Databases" },
-  // Cloud / DevOps
   { label: "AWS", emoji: "☁️", category: "Cloud & DevOps" },
   { label: "Docker", emoji: "🐳", category: "Cloud & DevOps" },
   { label: "Kubernetes", emoji: "⎈", category: "Cloud & DevOps" },
   { label: "Git", emoji: "🌿", category: "Cloud & DevOps" },
   { label: "Linux", emoji: "🐧", category: "Cloud & DevOps" },
   { label: "CI/CD", emoji: "🔄", category: "Cloud & DevOps" },
-  // ML / AI
   { label: "TensorFlow", emoji: "🧠", category: "ML & AI" },
   { label: "PyTorch", emoji: "🔥", category: "ML & AI" },
   { label: "Scikit-learn", emoji: "📊", category: "ML & AI" },
   { label: "NumPy", emoji: "🔢", category: "ML & AI" },
   { label: "Pandas", emoji: "🐼", category: "ML & AI" },
-  // CS Fundamentals
   { label: "DSA", emoji: "🌲", category: "CS Fundamentals" },
   { label: "OS", emoji: "💻", category: "CS Fundamentals" },
   { label: "DBMS", emoji: "📦", category: "CS Fundamentals" },
@@ -61,6 +56,286 @@ const SKILLS: Skill[] = [
 ];
 
 const SKILL_CATEGORIES = Array.from(new Set(SKILLS.map((s) => s.category)));
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return "Good Morning";
+  if (hour >= 12 && hour < 17) return "Good Afternoon";
+  if (hour >= 17 && hour < 21) return "Good Evening";
+  return "Good Night";
+}
+
+// ─── Rubik's Cube Scroll Indicator ───────────────────────────────────────────
+
+// Sticker position labels for stable React keys
+const STICKER_POSITIONS = [
+  "tl",
+  "tc",
+  "tr",
+  "ml",
+  "mc",
+  "mr",
+  "bl",
+  "bc",
+  "br",
+] as const;
+
+const CUBE_FACES = [
+  {
+    name: "front",
+    style: { transform: "rotateY(0deg) translateZ(12px)" },
+    solvedColor: "#e53e3e",
+    scrambledColors: [
+      "#e53e3e",
+      "#0A84FF",
+      "#f6e05e",
+      "#48bb78",
+      "#e53e3e",
+      "#ed8936",
+      "#BF5AF2",
+      "#e53e3e",
+      "#0A84FF",
+    ],
+  },
+  {
+    name: "back",
+    style: { transform: "rotateY(180deg) translateZ(12px)" },
+    solvedColor: "#ed8936",
+    scrambledColors: [
+      "#f6e05e",
+      "#ed8936",
+      "#BF5AF2",
+      "#ed8936",
+      "#48bb78",
+      "#e53e3e",
+      "#0A84FF",
+      "#f6e05e",
+      "#ed8936",
+    ],
+  },
+  {
+    name: "left",
+    style: { transform: "rotateY(-90deg) translateZ(12px)" },
+    solvedColor: "#48bb78",
+    scrambledColors: [
+      "#48bb78",
+      "#BF5AF2",
+      "#ed8936",
+      "#f6e05e",
+      "#48bb78",
+      "#0A84FF",
+      "#e53e3e",
+      "#48bb78",
+      "#BF5AF2",
+    ],
+  },
+  {
+    name: "right",
+    style: { transform: "rotateY(90deg) translateZ(12px)" },
+    solvedColor: "#0A84FF",
+    scrambledColors: [
+      "#0A84FF",
+      "#e53e3e",
+      "#48bb78",
+      "#0A84FF",
+      "#BF5AF2",
+      "#f6e05e",
+      "#ed8936",
+      "#0A84FF",
+      "#48bb78",
+    ],
+  },
+  {
+    name: "top",
+    style: { transform: "rotateX(90deg) translateZ(12px)" },
+    solvedColor: "#f0f0f0",
+    scrambledColors: [
+      "#f0f0f0",
+      "#e53e3e",
+      "#0A84FF",
+      "#BF5AF2",
+      "#f0f0f0",
+      "#48bb78",
+      "#f6e05e",
+      "#f0f0f0",
+      "#ed8936",
+    ],
+  },
+  {
+    name: "bottom",
+    style: { transform: "rotateX(-90deg) translateZ(12px)" },
+    solvedColor: "#f6e05e",
+    scrambledColors: [
+      "#BF5AF2",
+      "#f6e05e",
+      "#e53e3e",
+      "#f6e05e",
+      "#0A84FF",
+      "#f6e05e",
+      "#48bb78",
+      "#ed8936",
+      "#f6e05e",
+    ],
+  },
+];
+
+function interpolateColor(color1: string, color2: string, t: number): string {
+  const hex = (c: string) => [
+    Number.parseInt(c.slice(1, 3), 16),
+    Number.parseInt(c.slice(3, 5), 16),
+    Number.parseInt(c.slice(5, 7), 16),
+  ];
+  const [r1, g1, b1] = hex(color1);
+  const [r2, g2, b2] = hex(color2);
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
+function CubeFace({
+  face,
+  progress,
+}: {
+  face: (typeof CUBE_FACES)[number];
+  progress: number;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        width: "24px",
+        height: "24px",
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gridTemplateRows: "repeat(3, 1fr)",
+        gap: "1px",
+        padding: "1.5px",
+        background: "#111",
+        borderRadius: "2px",
+        ...face.style,
+        backfaceVisibility: "hidden",
+      }}
+    >
+      {STICKER_POSITIONS.map((pos, idx) => {
+        // layer-by-layer: row2 (bottom) solves first, then row1, then row0 (top)
+        const row = Math.floor(idx / 3); // 0=top,1=mid,2=bottom
+        const layerOrder = [2, 1, 0]; // bottom first
+        const layerIndex = layerOrder[row]; // 0=first to solve, 2=last
+        const start = layerIndex / 3;
+        const end = (layerIndex + 1) / 3;
+        const t = Math.max(0, Math.min(1, (progress - start) / (end - start)));
+        return (
+          <div
+            key={`${face.name}-${pos}`}
+            style={{
+              background: interpolateColor(
+                face.scrambledColors[idx],
+                face.solvedColor,
+                t,
+              ),
+              borderRadius: "1px",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function RubiksCubeScrollIndicator() {
+  const [hovered, setHovered] = useState(false);
+
+  const springTop = useSpring(90, { stiffness: 80, damping: 20 });
+
+  const [displayTop, setDisplayTop] = useState(90);
+  const [displayProgress, setDisplayProgress] = useState(0);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const scrollable = document.body.scrollHeight - window.innerHeight;
+      const progress =
+        scrollable > 0 ? Math.min(1, window.scrollY / scrollable) : 0;
+      springTop.set(90 + progress * (window.innerHeight - 40 - 90));
+      setDisplayProgress(progress);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [springTop]);
+
+  useEffect(() => {
+    const unsubTop = springTop.on("change", (v) => setDisplayTop(v));
+    return () => {
+      unsubTop();
+    };
+  }, [springTop]);
+
+  const rotX = 25 + displayProgress * 360;
+  const rotY = 45 + displayProgress * 360;
+
+  return (
+    <div
+      data-ocid="cube.scroll_indicator"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: "fixed",
+        right: "16px",
+        top: `${displayTop}px`,
+        transform: "translateY(-50%)",
+        zIndex: 40,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "6px",
+        pointerEvents: "auto",
+      }}
+    >
+      <div
+        style={{
+          width: "24px",
+          height: "24px",
+          perspective: "72px",
+          filter:
+            "drop-shadow(0 4px 12px rgba(10,132,255,0.35)) drop-shadow(0 0 6px rgba(139,92,246,0.2))",
+        }}
+      >
+        <div
+          style={{
+            width: "24px",
+            height: "24px",
+            position: "relative",
+            transformStyle: "preserve-3d",
+            transform: `rotateX(${rotX}deg) rotateY(${rotY}deg)`,
+          }}
+        >
+          {CUBE_FACES.map((face) => (
+            <CubeFace key={face.name} face={face} progress={displayProgress} />
+          ))}
+        </div>
+      </div>
+
+      <motion.span
+        initial={{ opacity: 0 }}
+        animate={{ opacity: hovered ? 1 : 0 }}
+        transition={{ duration: 0.2 }}
+        style={{
+          fontSize: "8px",
+          fontWeight: 600,
+          letterSpacing: "0.15em",
+          textTransform: "uppercase",
+          color: "rgba(163,168,179,0.7)",
+          userSelect: "none",
+        }}
+      >
+        scroll
+      </motion.span>
+    </div>
+  );
+}
 
 // ─── Starfield Canvas ─────────────────────────────────────────────────────────
 
@@ -74,7 +349,6 @@ function StarfieldCanvas() {
     if (!ctx) return;
 
     let animId: number;
-
     const stars: {
       x: number;
       y: number;
@@ -124,10 +398,8 @@ function StarfieldCanvas() {
 
     init();
     draw();
-
     const ro = new ResizeObserver(init);
     ro.observe(canvas);
-
     return () => {
       cancelAnimationFrame(animId);
       ro.disconnect();
@@ -151,13 +423,17 @@ function RevealSection({
   delay = 0,
 }: { children: React.ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-80px" });
+  const inView = useInView(ref, { once: false, margin: "-60px" });
 
   return (
     <motion.div
       ref={ref}
       initial={{ opacity: 0, y: 40, scale: 0.97 }}
-      animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
+      animate={
+        inView
+          ? { opacity: 1, y: 0, scale: 1 }
+          : { opacity: 0, y: 40, scale: 0.97 }
+      }
       transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
       className={className}
     >
@@ -197,6 +473,11 @@ function BentoTile({
 function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [greeting, setGreeting] = useState<string | null>(null);
+
+  useEffect(() => {
+    setGreeting(getGreeting());
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -215,12 +496,23 @@ function Navbar() {
         }}
         transition={{ duration: 0.3 }}
       >
-        {/* Logo */}
-        <span className="text-base font-black tracking-[0.18em] text-white uppercase flex-shrink-0">
-          KALAKARS
-        </span>
+        <div className="flex flex-col flex-shrink-0 leading-none">
+          <span className="text-base font-black tracking-[0.18em] text-white uppercase">
+            KALAKARS
+          </span>
+          {greeting && (
+            <motion.span
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
+              className="text-[10px] font-medium uppercase tracking-widest mt-0.5"
+              style={{ color: "#A3A8B3" }}
+            >
+              {greeting}
+            </motion.span>
+          )}
+        </div>
 
-        {/* Desktop nav links */}
         <div className="hidden md:flex items-center gap-1 flex-1 justify-center">
           {NAV_LINKS.map((link) => (
             <a
@@ -234,7 +526,6 @@ function Navbar() {
           ))}
         </div>
 
-        {/* CTA */}
         <motion.a
           href="#contact"
           data-ocid="nav.contact.button"
@@ -253,7 +544,6 @@ function Navbar() {
           Get In Touch
         </motion.a>
 
-        {/* Mobile hamburger */}
         <button
           type="button"
           className="md:hidden ml-auto p-1.5 text-[#A3A8B3] hover:text-white cursor-pointer"
@@ -275,7 +565,6 @@ function Navbar() {
         </button>
       </motion.nav>
 
-      {/* Mobile dropdown */}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
@@ -329,10 +618,8 @@ function Hero() {
       }}
     >
       <StarfieldCanvas />
-      {/* Vignette */}
       <div className="absolute inset-0 vignette z-10" />
 
-      {/* Content */}
       <div className="relative z-20 flex flex-col items-center text-center px-6 max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 60 }}
@@ -340,7 +627,6 @@ function Hero() {
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center gap-4"
         >
-          {/* Badge */}
           <motion.span
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -356,7 +642,6 @@ function Hero() {
             CS Engineering Portfolio
           </motion.span>
 
-          {/* Main title */}
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -370,7 +655,6 @@ function Hero() {
             KALAKARS
           </motion.h1>
 
-          {/* Subtitle */}
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -387,7 +671,6 @@ function Hero() {
             The Monster Trio.
           </motion.h2>
 
-          {/* Microcopy */}
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -398,7 +681,6 @@ function Hero() {
             Building tomorrow's tech, one commit at a time.
           </motion.p>
 
-          {/* CTAs */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -443,7 +725,6 @@ function Hero() {
         </motion.div>
       </div>
 
-      {/* Scroll indicator */}
       <motion.div
         className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2"
         initial={{ opacity: 0 }}
@@ -484,7 +765,6 @@ function ProjectCard({ index }: { index: number }) {
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
       data-ocid={`projects.item.${index}`}
     >
-      {/* Thumbnail placeholder */}
       <div
         className="w-full h-40 relative"
         style={{
@@ -503,7 +783,6 @@ function ProjectCard({ index }: { index: number }) {
             <span className="text-xl">🚀</span>
           </div>
         </div>
-        {/* Decorative lines */}
         <div
           className="absolute bottom-0 left-0 right-0 h-px"
           style={{
@@ -514,7 +793,6 @@ function ProjectCard({ index }: { index: number }) {
       </div>
 
       <div className="p-5 space-y-3">
-        {/* Title placeholder */}
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-2 flex-1">
             <div
@@ -539,7 +817,6 @@ function ProjectCard({ index }: { index: number }) {
           />
         </div>
 
-        {/* Tag placeholders */}
         <div className="flex gap-2 flex-wrap">
           {[40, 32, 48].map((w) => (
             <div
@@ -554,7 +831,6 @@ function ProjectCard({ index }: { index: number }) {
           ))}
         </div>
 
-        {/* Future project label */}
         <p
           className="text-xs uppercase tracking-widest"
           style={{ color: "rgba(163,168,179,0.5)" }}
@@ -587,23 +863,175 @@ const TRIO_MEMBERS: { id: string; name: string | null; bio: string | null }[] =
     },
   ];
 
+// ─── Skill Tile Expanded Portal ───────────────────────────────────────────────
+
+function SkillExpandedPortal({
+  skill,
+  onCollapse,
+}: { skill: Skill; onCollapse: () => void }) {
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        key="skill-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.22 }}
+        onClick={onCollapse}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.55)",
+          zIndex: 9998,
+          backdropFilter: "blur(4px)",
+        }}
+        data-ocid="skills.modal"
+      />
+
+      <motion.div
+        key={`skill-expanded-${skill.label}`}
+        layoutId={`skill-tile-${skill.label}`}
+        style={{
+          position: "fixed",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          pointerEvents: "none",
+        }}
+      >
+        <motion.div
+          style={{
+            pointerEvents: "auto",
+            minWidth: "280px",
+            maxWidth: "340px",
+            width: "90vw",
+            borderRadius: "24px",
+            padding: "20px",
+            background: "rgba(14,16,22,0.97)",
+            border: "1px solid rgba(10,132,255,0.28)",
+            backdropFilter: "blur(20px)",
+            boxShadow:
+              "0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(10,132,255,0.08), 0 0 40px rgba(10,132,255,0.12)",
+          }}
+        >
+          <motion.div layout className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl leading-none">{skill.emoji}</span>
+              <span
+                className="text-sm font-semibold tracking-wide"
+                style={{ color: "#e2e6f0" }}
+              >
+                {skill.label}
+              </span>
+            </div>
+            <motion.button
+              type="button"
+              onClick={onCollapse}
+              data-ocid="skills.close_button"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.92 }}
+              transition={{ type: "spring", stiffness: 500, damping: 22 }}
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#fff",
+                fontSize: "16px",
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              ×
+            </motion.button>
+          </motion.div>
+
+          <motion.div
+            layout
+            style={{
+              height: "1px",
+              background:
+                "linear-gradient(to right, rgba(10,132,255,0.2), rgba(139,92,246,0.2), transparent)",
+              marginBottom: "16px",
+            }}
+          />
+
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.26, duration: 0.3, ease: "easeOut" }}
+          >
+            <div
+              style={{
+                width: "100%",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "12px",
+                padding: "10px 14px",
+                color: "rgba(163,168,179,0.5)",
+                fontSize: "13px",
+                lineHeight: 1.6,
+                minHeight: "96px",
+                fontFamily: "inherit",
+                userSelect: "none",
+              }}
+            >
+              Notes coming soon...
+            </div>
+          </motion.div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
 // ─── Skills Section ───────────────────────────────────────────────────────────
 
-function SkillTile({ skill, index }: { skill: Skill; index: number }) {
+function SkillTile({
+  skill,
+  index,
+  isExpanded,
+  onExpand,
+}: { skill: Skill; index: number; isExpanded: boolean; onExpand: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
+  const inView = useInView(ref, { once: false, margin: "-40px" });
 
   return (
     <motion.div
       ref={ref}
+      layoutId={`skill-tile-${skill.label}`}
       initial={{ opacity: 0, scale: 0.85, y: 16 }}
-      animate={inView ? { opacity: 1, scale: 1, y: 0 } : {}}
+      animate={
+        isExpanded
+          ? { opacity: 0, scale: 0.95, y: 0 }
+          : inView
+            ? { opacity: 1, scale: 1, y: 0 }
+            : { opacity: 0, scale: 0.85, y: 16 }
+      }
       transition={{
-        duration: 0.4,
-        delay: index * 0.03,
-        ease: [0.22, 1, 0.36, 1],
+        layout: { type: "spring", stiffness: 380, damping: 30 },
+        opacity: { duration: 0.3, delay: isExpanded ? 0 : index * 0.03 },
+        scale: {
+          duration: 0.4,
+          delay: isExpanded ? 0 : index * 0.03,
+          ease: [0.22, 1, 0.36, 1],
+        },
+        y: {
+          duration: 0.4,
+          delay: isExpanded ? 0 : index * 0.03,
+          ease: [0.22, 1, 0.36, 1],
+        },
       }}
-      className="skill-tile flex flex-col items-center gap-1.5 px-3 py-3 rounded-2xl cursor-default"
+      onClick={onExpand}
+      className="skill-tile flex flex-col items-center gap-1.5 px-3 py-3 rounded-2xl cursor-pointer"
       style={{
         background: "rgba(26,28,34,0.8)",
         border: "1px solid rgba(255,255,255,0.07)",
@@ -615,6 +1043,8 @@ function SkillTile({ skill, index }: { skill: Skill; index: number }) {
         borderColor: "rgba(10,132,255,0.3)",
         transition: { type: "spring", stiffness: 500, damping: 22 },
       }}
+      whileTap={{ scale: 0.96 }}
+      data-ocid={`skills.item.${index + 1}`}
     >
       <span className="text-xl leading-none">{skill.emoji}</span>
       <span
@@ -628,6 +1058,11 @@ function SkillTile({ skill, index }: { skill: Skill; index: number }) {
 }
 
 function SkillsSection() {
+  const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
+  const expandedSkillData = expandedSkill
+    ? (SKILLS.find((s) => s.label === expandedSkill) ?? null)
+    : null;
+
   return (
     <section id="skills" className="py-24 px-4">
       <div className="max-w-5xl mx-auto">
@@ -644,7 +1079,8 @@ function SkillsSection() {
                 Technical Skills
               </h2>
               <p className="mt-2 text-sm" style={{ color: "#A3A8B3" }}>
-                Full-spectrum CS curriculum mastery.
+                Full-spectrum CS curriculum mastery. Tap any skill to learn
+                more.
               </p>
             </div>
 
@@ -661,7 +1097,13 @@ function SkillsSection() {
                 </h3>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
                   {SKILLS.filter((s) => s.category === cat).map((skill, i) => (
-                    <SkillTile key={skill.label} skill={skill} index={i} />
+                    <SkillTile
+                      key={skill.label}
+                      skill={skill}
+                      index={i}
+                      isExpanded={expandedSkill === skill.label}
+                      onExpand={() => setExpandedSkill(skill.label)}
+                    />
                   ))}
                 </div>
               </div>
@@ -669,6 +1111,16 @@ function SkillsSection() {
           </BentoTile>
         </RevealSection>
       </div>
+
+      <AnimatePresence>
+        {expandedSkillData && (
+          <SkillExpandedPortal
+            key={expandedSkillData.label}
+            skill={expandedSkillData}
+            onCollapse={() => setExpandedSkill(null)}
+          />
+        )}
+      </AnimatePresence>
     </section>
   );
 }
@@ -756,7 +1208,6 @@ function ContactFooter() {
           </BentoTile>
         </RevealSection>
 
-        {/* Footer bottom */}
         <div
           className="pt-6"
           style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
@@ -765,7 +1216,6 @@ function ContactFooter() {
             <span className="text-sm font-black tracking-[0.2em] uppercase text-white">
               KALAKARS
             </span>
-
             <div className="flex gap-6">
               {NAV_LINKS.map((link) => (
                 <a
@@ -809,12 +1259,11 @@ export default function App() {
   return (
     <div className="min-h-screen font-inter" style={{ background: "#0F1115" }}>
       <Navbar />
+      <RubiksCubeScrollIndicator />
       <main>
         <Hero />
         <div className="max-w-5xl mx-auto px-4">
-          {/* Row 1: Projects + Trio side-by-side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 py-8">
-            {/* Projects column */}
             <RevealSection>
               <div>
                 <div className="mb-6">
@@ -841,7 +1290,6 @@ export default function App() {
               </div>
             </RevealSection>
 
-            {/* Trio column */}
             <RevealSection delay={0.15}>
               <div>
                 <div className="mb-6">
@@ -913,10 +1361,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Row 2: Skills full-width */}
         <SkillsSection />
-
-        {/* Contact / Footer */}
         <ContactFooter />
       </main>
     </div>
