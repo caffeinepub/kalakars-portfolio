@@ -137,7 +137,7 @@ function buildCubelets() {
 
 const CUBELETS = buildCubelets();
 
-// 9 cubelets per layer, assembled 10 at a time → 1 group (all fit in a single group)
+// 9 cubelets per layer, assembled 14 at a time → 1 group
 const GROUPS_PER_LAYER = 1;
 
 function RubiksCubeScrollIndicator() {
@@ -165,15 +165,15 @@ function RubiksCubeScrollIndicator() {
   }, [springTop]);
 
   // Compute per-cubelet transform based on scroll progress.
-  // Cubelets are grouped in tens (10 at once). Each layer gets 1/3 of the scroll
+  // Cubelets are grouped in fourteens (14 at once). Each layer gets 1/3 of the scroll
   // range, split evenly across GROUPS_PER_LAYER groups so the last group always
   // finishes exactly at scrollProgress = 1.
   const cubeletStyles = useMemo(() => {
     return CUBELETS.map((c) => {
       const layerStart = c.layer / 3;
       const layerRange = 1 / 3;
-      // group index: 10 cubelets share the same group
-      const group = Math.floor(c.layerIndex / 10);
+      // group index: 14 cubelets share the same group
+      const group = Math.floor(c.layerIndex / 14);
       const slotSize = layerRange / GROUPS_PER_LAYER;
       const windowStart = layerStart + group * slotSize;
       const windowEnd = windowStart + slotSize;
