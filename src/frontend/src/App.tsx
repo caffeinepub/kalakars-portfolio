@@ -247,11 +247,17 @@ function CubeFace({
 
 function RubiksCubeScrollIndicator() {
   const [hovered, setHovered] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [floatOffset, setFloatOffset] = useState(0);
 
   const springTop = useSpring(90, { stiffness: 80, damping: 20 });
 
   const [displayTop, setDisplayTop] = useState(90);
   const [displayProgress, setDisplayProgress] = useState(0);
+
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const floatStartRef = useRef<number | null>(null);
 
   useEffect(() => {
     const onScroll = () => {
@@ -260,10 +266,19 @@ function RubiksCubeScrollIndicator() {
         scrollable > 0 ? Math.min(1, window.scrollY / scrollable) : 0;
       springTop.set(90 + progress * (window.innerHeight - 40 - 90));
       setDisplayProgress(progress);
+      setIsScrolling(true);
+      setFloatOffset(0);
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = setTimeout(() => {
+        setIsScrolling(false);
+      }, 800);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    };
   }, [springTop]);
 
   useEffect(() => {
@@ -272,6 +287,32 @@ function RubiksCubeScrollIndicator() {
       unsubTop();
     };
   }, [springTop]);
+
+  // Float animation loop when not scrolling
+  useEffect(() => {
+    if (isScrolling) {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      floatStartRef.current = null;
+      setFloatOffset(0);
+      return;
+    }
+
+    const animate = (timestamp: number) => {
+      if (floatStartRef.current === null) floatStartRef.current = timestamp;
+      const elapsed = timestamp - floatStartRef.current;
+      const offset = Math.sin((elapsed / 3125) * Math.PI * 2) * 5;
+      setFloatOffset(offset);
+      rafRef.current = requestAnimationFrame(animate);
+    };
+
+    rafRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [isScrolling]);
 
   const rotX = 25 + displayProgress * 360;
   const rotY = 45 + displayProgress * 360;
@@ -284,7 +325,7 @@ function RubiksCubeScrollIndicator() {
       style={{
         position: "fixed",
         right: "16px",
-        top: `${displayTop}px`,
+        top: `${displayTop + floatOffset}px`,
         transform: "translateY(-50%)",
         zIndex: 40,
         display: "flex",
@@ -1262,7 +1303,7 @@ export default function App() {
       <RubiksCubeScrollIndicator />
       <main>
         <Hero />
-        <div className="max-w-5xl mx-auto px-4">
+        <div id="projects" className="max-w-5xl mx-auto px-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 py-8">
             <RevealSection>
               <div>
