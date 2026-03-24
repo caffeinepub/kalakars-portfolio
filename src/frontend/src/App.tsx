@@ -575,8 +575,16 @@ const TRIO_MEMBERS: { id: string; name: string | null; bio: string | null }[] =
       name: "YashSaan10",
       bio: "Alias: The Cat — Moves silently, codes precisely.",
     },
-    { id: "member-2", name: null, bio: null },
-    { id: "member-3", name: null, bio: null },
+    {
+      id: "member-2",
+      name: "Deev",
+      bio: "Alias: The Strongest — Built different, codes harder.",
+    },
+    {
+      id: "member-3",
+      name: "Saad",
+      bio: "Alias: The Architect — Thinks three steps ahead, ships ten steps ahead.",
+    },
   ];
 
 // ─── Skills Section ───────────────────────────────────────────────────────────
@@ -794,11 +802,6 @@ function ContactFooter() {
     </footer>
   );
 }
-
-// ─── Bento Grid Layout ────────────────────────────────────────────────────────
-// Row 1: Projects (left, large) + Trio (right, large)
-// Row 2: Skills (full-width)
-// Row 3: Contact
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 
